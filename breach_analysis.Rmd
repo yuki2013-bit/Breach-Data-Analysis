@@ -1,0 +1,143 @@
+---
+title: "Breach Data Analysis"
+author: "Your Name"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+This analysis explores data breaches, identifying trends, common exposed data types, and the impact of breaches on different services.
+
+## Load Libraries and Dataset
+```{r load_libraries, message=FALSE, warning=FALSE}
+# Install missing packages
+packages <- c("tidyverse", "lubridate", "knitr")
+new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
+
+if(length(new_packages)) install.packages(new_packages)
+
+# Load libraries
+library(tidyverse)
+library(lubridate)
+library(knitr)
+```
+
+```{r load_data}
+data <- read.csv("breached_services_info.csv", stringsAsFactors = FALSE)
+```
+
+## Data Cleaning and Preparation
+```{r data_cleaning}
+data$BreachDate <- as.Date(data$BreachDate, format="%Y-%m-%d")
+data$AddedDate <- as.Date(data$AddedDate, format="%Y-%m-%d")
+data$ModifiedDate <- as.Date(data$ModifiedDate, format="%Y-%m-%d")
+```
+
+## Number of Breaches Per Year
+```{r breaches_per_year}
+data %>%
+  mutate(Year = year(BreachDate)) %>%
+  group_by(Year) %>%
+  summarise(n = n()) %>%
+  ggplot(aes(x = Year, y = n)) +
+  geom_col(fill = "blue") +
+  theme_minimal() +
+  labs(title = "Number of Breaches per Year", x = "Year", y = "Count")
+```
+
+## Top 10 Services with Highest Breaches
+```{r top_services}
+data %>%
+  arrange(desc(PwnCount)) %>%
+  select(Name, PwnCount) %>%
+  head(10) %>%
+  ggplot(aes(x = reorder(Name, PwnCount), y = PwnCount)) +
+  geom_col(fill = "red") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Top 10 Services with Highest Breaches", x = "Service", y = "Pwned Accounts")
+```
+
+## Verified vs Unverified Breaches
+```{r verified_vs_unverified}
+data %>%
+  group_by(IsVerified) %>%
+  summarise(n = n()) %>%
+  ggplot(aes(x = IsVerified, y = n, fill = IsVerified)) +
+  geom_col() +
+  theme_minimal() +
+  labs(title = "Verified vs Unverified Breaches", x = "Verified", y = "Count")
+```
+
+## Breach Severity Analysis
+```{r breach_severity}
+data <- data %>%
+  mutate(BreachSeverity = case_when(
+    PwnCount < 1000000 ~ "Small",
+    PwnCount >= 1000000 & PwnCount < 10000000 ~ "Medium",
+    PwnCount >= 10000000 ~ "Large"
+  ))
+
+data %>%
+  group_by(BreachSeverity) %>%
+  summarise(n = n()) %>%
+  ggplot(aes(x = BreachSeverity, y = n, fill = BreachSeverity)) +
+  geom_col() +
+  theme_minimal() +
+  labs(title = "Breach Severity Distribution", x = "Severity", y = "Count")
+```
+
+## Trends in Sensitive Data Breaches
+```{r sensitive_breaches, warning=FALSE, message=FALSE}
+if ("IsSensitive" %in% colnames(data)) {
+  data$IsSensitive <- as.logical(data$IsSensitive)  # Ensure correct format
+  
+  sensitive_breaches <- data %>%
+    filter(!is.na(BreachDate) & IsSensitive == TRUE) %>%
+    mutate(Year = year(BreachDate)) %>%
+    group_by(Year) %>%
+    summarise(n = n())
+  
+  if(nrow(sensitive_breaches) > 0) {
+    ggplot(sensitive_breaches, aes(x = Year, y = n)) +
+      geom_line(color = "darkred", size = 1.2) +
+      theme_minimal() +
+      labs(title = "Trends in Sensitive Data Breaches", x = "Year", y = "Count")
+  } else {
+    print("No data available for sensitive breaches.")
+  }
+} else {
+  print("Column 'IsSensitive' not found in dataset.")
+}
+```
+
+## Distribution of Breaches by Domain
+```{r breach_by_domain}
+data %>%
+  group_by(Domain) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n)) %>%
+  head(10) %>%
+  ggplot(aes(x = reorder(Domain, -n), y = n, fill = Domain)) +
+  geom_col() +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Top Domains Affected by Breaches", x = "Domain", y = "Number of Breaches")
+```
+
+## Time Between Breach and Reporting
+```{r breach_reporting_time}
+data %>%
+  mutate(ReportDelay = as.numeric(AddedDate - BreachDate)) %>%
+  ggplot(aes(x = ReportDelay)) +
+  geom_histogram(binwidth = 30, fill = "orange", color = "black") +
+  theme_minimal() +
+  labs(title = "Distribution of Reporting Delay", x = "Days Between Breach and Report", y = "Frequency")
+```
+
+## Conclusion
+This analysis provides key insights into breach trends, affected services, and exposed data. Addressing these vulnerabilities is crucial for enhancing digital security.
